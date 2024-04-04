@@ -1,4 +1,4 @@
-from typing import List
+import json
 from .AnsweringToolBase import AnsweringToolBase
 
 from langchain.chains.llm import LLMChain
@@ -18,11 +18,11 @@ class QuestionAnswerTool(AnsweringToolBase):
         self.vector_store = AzureSearchHelper().get_vector_store()
         self.verbose = True
 
-    def answer_question(self, question: str, chat_history: List[dict], **kwargs: dict):
+    def answer_question(self, question: str, chat_history: list[dict], **kwargs: dict):
         config = ConfigHelper.get_active_config_or_default()
         answering_prompt = PromptTemplate(
             template=config.prompts.answering_prompt,
-            input_variables=["question", "sources"],
+            input_variables=["user_question", "chat history", "documents"],
         )
 
         llm_helper = LLMHelper()
@@ -36,12 +36,23 @@ class QuestionAnswerTool(AnsweringToolBase):
         answer_generator = LLMChain(
             llm=llm_helper.get_llm(), prompt=answering_prompt, verbose=self.verbose
         )
-        sources_text = "\n\n".join(
-            [f"[doc{i+1}]: {source.page_content}" for i, source in enumerate(sources)]
+        documents = json.dumps(
+            {
+                "retrieved_documents": [
+                    {f"[doc{i+1}]": {"content": source.page_content}}
+                    for i, source in enumerate(sources)
+                ],
+            }
         )
 
         with get_openai_callback() as cb:
-            result = answer_generator({"question": question, "sources": sources_text})
+            result = answer_generator(
+                {
+                    "user_question": question,
+                    "documents": documents,
+                    "chat history": chat_history,
+                }
+            )
 
         answer = result["text"]
         print(f"Answer: {answer}")

@@ -1,13 +1,21 @@
-from typing import List
+import json
 from .AnsweringToolBase import AnsweringToolBase
 
 from langchain.chains.llm import LLMChain
-from langchain.prompts import PromptTemplate
+from langchain.prompts import (
+    ChatPromptTemplate,
+    HumanMessagePromptTemplate,
+    MessagesPlaceholder,
+    AIMessagePromptTemplate,
+    FewShotChatMessagePromptTemplate,
+)
+from langchain_core.messages import SystemMessage
 from langchain_community.callbacks import get_openai_callback
 
 from ..helpers.AzureSearchHelper import AzureSearchHelper
 from ..helpers.ConfigHelper import ConfigHelper
 from ..helpers.LLMHelper import LLMHelper
+from ..helpers.EnvHelper import EnvHelper
 from ..common.Answer import Answer
 from ..common.SourceDocument import SourceDocument
 
@@ -17,12 +25,37 @@ class QuestionAnswerTool(AnsweringToolBase):
         self.name = "QuestionAnswer"
         self.vector_store = AzureSearchHelper().get_vector_store()
         self.verbose = True
+        self.env_helper = EnvHelper()
 
-    def answer_question(self, question: str, chat_history: List[dict], **kwargs: dict):
+    def answer_question(self, question: str, chat_history: list[dict], **kwargs: dict):
         config = ConfigHelper.get_active_config_or_default()
-        answering_prompt = PromptTemplate(
-            template=config.prompts.answering_prompt,
-            input_variables=["question", "sources"],
+
+        examples = [config.prompts.answering_prompt_example]
+
+        example_prompt = ChatPromptTemplate.from_messages(
+            [
+                HumanMessagePromptTemplate.from_template(
+                    config.prompts.answering_user_prompt
+                ),
+                AIMessagePromptTemplate.from_template("{answer}"),
+            ]
+        )
+
+        few_shot_prompt = FewShotChatMessagePromptTemplate(
+            example_prompt=example_prompt,
+            examples=examples,
+        )
+
+        answering_prompt = ChatPromptTemplate.from_messages(
+            [
+                SystemMessage(content=config.prompts.answering_system_prompt),
+                few_shot_prompt,
+                SystemMessage(content=self.env_helper.AZURE_OPENAI_SYSTEM_MESSAGE),
+                MessagesPlaceholder("chat_history"),
+                HumanMessagePromptTemplate.from_template(
+                    config.prompts.answering_user_prompt
+                ),
+            ]
         )
 
         llm_helper = LLMHelper()
@@ -36,12 +69,23 @@ class QuestionAnswerTool(AnsweringToolBase):
         answer_generator = LLMChain(
             llm=llm_helper.get_llm(), prompt=answering_prompt, verbose=self.verbose
         )
-        sources_text = "\n\n".join(
-            [f"[doc{i+1}]: {source.page_content}" for i, source in enumerate(sources)]
+        documents = json.dumps(
+            {
+                "retrieved_documents": [
+                    {f"[doc{i+1}]": {"content": source.page_content}}
+                    for i, source in enumerate(sources)
+                ],
+            }
         )
 
         with get_openai_callback() as cb:
-            result = answer_generator({"question": question, "sources": sources_text})
+            result = answer_generator(
+                {
+                    "user_question": question,
+                    "documents": documents,
+                    "chat_history": chat_history,
+                }
+            )
 
         answer = result["text"]
         print(f"Answer: {answer}")

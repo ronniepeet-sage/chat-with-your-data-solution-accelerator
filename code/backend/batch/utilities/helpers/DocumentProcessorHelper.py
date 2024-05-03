@@ -46,7 +46,7 @@ class DocumentProcessor:
 
     def process(self, source_url: str, processors: List[Processor]):
         vector_store_helper = AzureSearchHelper()
-        vector_store = vector_store_helper.get_vector_store()
+        vector_store = vector_store_helper.get_vector_store()  # todo remove this usage
         for processor in processors:
             if not processor.use_advanced_image_processing:
                 try:
@@ -65,7 +65,7 @@ class DocumentProcessor:
                     logger.error(f"Error adding embeddings for {source_url}: {e}")
                     raise e
             else:
-                logger.warn("Advanced image processing is not supported yet")
+                logger.warning("Advanced image processing is not supported yet")
 
     def process_using_integrated_vectorisation(self, source_url: str):
         env_helper: EnvHelper = EnvHelper()

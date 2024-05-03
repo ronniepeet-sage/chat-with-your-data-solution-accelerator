@@ -29,6 +29,20 @@ class SourceDocument:
     def __str__(self):
         return f"SourceDocument(id={self.id}, title={self.title}, source={self.source}, chunk={self.chunk}, offset={self.offset}, page_number={self.page_number}, chunk_id={self.chunk_id})"
 
+    def __eq__(self, other):
+        if isinstance(self, other.__class__):
+            return (
+                self.id == other.id
+                and self.content == other.content
+                and self.source == other.source
+                and self.title == other.title
+                and self.chunk == other.chunk
+                and self.offset == other.offset
+                and self.page_number == other.page_number
+                and self.chunk_id == other.chunk_id
+            )
+        return False
+
     def to_json(self):
         return json.dumps(self, cls=SourceDocumentEncoder)
 

@@ -22,3 +22,4 @@ COPY --from=frontend /home/node/app/dist/static /usr/src/app/static/
 ENV PYTHONPATH "${PYTHONPATH}:/usr/src/app"
 EXPOSE 80
 CMD ["uwsgi", "--http", ":80", "--wsgi-file", "app.py", "--callable", "app", "-b", "32768", "--http-timeout", "230"]
+#check sync
